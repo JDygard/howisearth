@@ -24,6 +24,8 @@
   "dependencies": {
     "dotenv": "^16.0.1",
     "express": "^4.18.1",
+    "jsonstat-euro": "^1.1.2",
+    "jsonstat-toolkit": "^1.4.2",
     "mongodb": "^4.6.0",
     "socket.io": "^4.5.1"
   }

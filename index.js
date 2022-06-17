@@ -2,11 +2,17 @@ import express from 'express';
 import path from 'path';
 import { MongoClient } from 'mongodb';
 import { createServer } from "http";
+import http from 'http';
 import { Server } from "socket.io";
 import 'dotenv/config';
 
+import JSONstat from "jsonstat-toolkit";
+import * as EuroJSONstat from "jsonstat-euro"
+
 const app = express();
 
+// =============================== Sockets
+// =============================== Sockets END
 
 // ============================= DB ==================================
 const uri = process.env.MONGODB;
@@ -32,8 +38,42 @@ async function run() {
 }
 run().catch(console.dir)
 
+// =============================== Get data from DB and check for freshness
+// =============================== Optionally refresh DB data
+// =============================== Prepare collected or freshened data
+// =============================== Socket the data in
+
 // =============================== END DB ==========================
-app.use(express.static('howisearth/build/'))
+
+// =============================== REST Request ====================
+// var APIBase = "http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/"
+// var APILanguage = "en/"
+// var APIDataset = "sdg_13_10?"
+// var APIFilter = "airpol=GHG&precision=1&src_crf=TOTX4_MEMONIA&unit=T_HAB"
+// var url = APIBase + APILanguage + APIDataset + APIFilter
+// console.log(url)
+// // "http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/en/nama_10_gdp?geo=EU28&precision=1&na_item=B1GQ&unit=CP_MEUR&time=2010&time=2011"
+// var request = http.get(url, function (response) {
+//   var buffer = "",
+//       data,
+//       output;
+
+//   response.on("data", function (chunk) {
+//     buffer += chunk;
+//   });
+
+//   response.on("end", function (err) {
+//     console.log(buffer);
+//     console.log("\n");
+//     data = JSON.parse(buffer);
+//     output = data.label;
+//     console.log("Label:" + output)
+//   })
+// })
+
+// ============================== END REST Request =================s
+
+app.use(express.static('howisearth/build/'));
 
 const httpServer = createServer();
 const io = new Server(httpServer, {
@@ -44,7 +84,6 @@ const io = new Server(httpServer, {
 
 const hostname = '127.0.0.1';
 const port = 4000;
-
 
 httpServer.listen(4003);
 app.listen(4000, () => {

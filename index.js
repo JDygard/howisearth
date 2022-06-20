@@ -14,6 +14,29 @@ const app = express();
 // =============================== Sockets
 // =============================== Sockets END
 
+// =============================== REST Request ====================
+const query = {
+  "dataset": "sdg_13_10",
+  "filter": {
+    src_crf: "TOTXMEMONIA",
+    unit: "T_HAB",
+  }
+}
+var dataset = {};
+EuroJSONstat.fetchQuery(query, false).then(eq=> {
+  if (eq.class === "error")
+  console.log(eq)
+})
+
+EuroJSONstat.fetchDataset(query).then(ds=>{
+  if(ds.class==="dataset"){
+    dataset = ds
+    console.log(ds.label)
+    console.log(JSONstat(dataset).Data({"geo" : "SE"}))
+  }
+})
+// ============================== END REST Request =================s
+
 // ============================= DB ==================================
 const uri = process.env.MONGODB;
 const mongo = new MongoClient(uri);
@@ -23,11 +46,15 @@ async function run() {
     await mongo.connect();
     const database = mongo.db('how_is_earth')
     const earthDB = database.collection('earthDB')
+    const filter = {"dataset": "sdg_13_10"}
 
-    const query = { test: 1 };
-    const movie = await earthDB.findOne(query)
-    console.log("============= DB CONNECTED ================")
-    console.log(movie)
+    const updateDoc = {
+      $set: {
+        "sdg_13_10": dataset,
+      },
+    };
+    const result = await earthDB.updateOne(filter, updateDoc)
+
   } catch (error) {
     console.log(error)
   }
@@ -38,40 +65,13 @@ async function run() {
 }
 run().catch(console.dir)
 
+
 // =============================== Get data from DB and check for freshness
 // =============================== Optionally refresh DB data
 // =============================== Prepare collected or freshened data
-// =============================== Socket the data in
+// =============================== Socket the data out
 
 // =============================== END DB ==========================
-
-// =============================== REST Request ====================
-// var APIBase = "http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/"
-// var APILanguage = "en/"
-// var APIDataset = "sdg_13_10?"
-// var APIFilter = "airpol=GHG&precision=1&src_crf=TOTX4_MEMONIA&unit=T_HAB"
-// var url = APIBase + APILanguage + APIDataset + APIFilter
-// console.log(url)
-// // "http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/en/nama_10_gdp?geo=EU28&precision=1&na_item=B1GQ&unit=CP_MEUR&time=2010&time=2011"
-// var request = http.get(url, function (response) {
-//   var buffer = "",
-//       data,
-//       output;
-
-//   response.on("data", function (chunk) {
-//     buffer += chunk;
-//   });
-
-//   response.on("end", function (err) {
-//     console.log(buffer);
-//     console.log("\n");
-//     data = JSON.parse(buffer);
-//     output = data.label;
-//     console.log("Label:" + output)
-//   })
-// })
-
-// ============================== END REST Request =================s
 
 app.use(express.static('howisearth/build/'));
 

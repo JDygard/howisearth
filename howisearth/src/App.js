@@ -1,11 +1,25 @@
 import './App.css';
-import RenderLineChart from './/components/StackedAreaChart'
+import RenderChart from './/components/StackedAreaChart.js';
+import { useEffect } from 'react';
+import { SocketContext, socket } from "./components/context/socket";
+import Button from "./components/UI/Button"
 
 function App() {
+  const getDataHandler = (event) => {
+    socket.emit("data")
+  }
+
+  useEffect(() => {
+    socket.on("data", () => {
+      
+    })
+  })
   return (
-    <div className="App">
-      <h3>Node is serving React as intended.</h3>
-    </div>
+    <SocketContext.Provider value={socket} className="app" >
+      <h3>Node is a real cunt.</h3>
+      <Button clickMe={getDataHandler} />
+      <RenderChart />
+    </SocketContext.Provider>
   );
 }
 

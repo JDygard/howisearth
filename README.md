@@ -17,7 +17,37 @@ This is website about delivering information concisely and permitting the user t
 
 ## Skeleton
 ### Phase 1, 2
-While there are only 31 countries at this point, design will be oriented around having reasonable space for all countries and data types when implemented in Phase 2. **Contextual modals** will be used to present selections to the user. **Countries** will be grouped by region and alphabetically within regions. **Data** to be presented on the chart will be grouped by compatibility.
+While there are only 31 countries at this point, selection design will be oriented around having reasonable space for all countries and data types when implemented in Phase 2. **Contextual modals** will be used to present selections to the user. **Countries** will be grouped by region and alphabetically within regions. **Data** to be presented on the chart will be grouped by compatibility.
+
+#### Data points
+Some initial hard data points are:
+
+    Population growth
+        Actual population (demo_pjan)
+        Projected population (proj_19np)
+    Per capita income (nama_10_pc, filter to current prices: euro)
+    GDP (nama_10_gdp)
+    Forest growth
+        Timber area (for_area)
+        Timber Volume (for_vol)
+    Air emissions
+        Net GHG emissions (sdg_13_10)
+        GHG emissions by sector (env_ac_aigg_q)
+        Air pollutants by source sector (env_air_emis)
+    Biodiversity
+    Waste
+        Generation of waste by category (env_wasgen)
+    Environmental Protection
+    Energy Production by type, by output, and by emissions subtotals
+        Renewable electricity production capacity (nrg_inf_epcrw)
+        Renewable electricity share in percent of total (nrg_ind_ren)
+        Production of electricity by fuel type (nrg_bal_peh)
+            (Lots of filters)
+    Environmental Sector (This represents new renewable energy output, costs of climate change mitigation, etc.)
+
+**Ratios**: These soft data points would be ratios of statistics that could be compared side-by-side other countries. For instance, per-capita income / climate change mitigation investment. This could even be expanded into a tool which lets the user select their own statistics to slot over/under the ratio.
+
+**Indicators**: These will be bars that indicate specific moments in time (vertical) or specific amounts (like a single Blue Origin launch in co2 emitted, or the amount of ppm co2 in the atmosphere associated with a +1.5c global average temperature)
 
 ### Phase 3
 The only difference in Phase 3 is that the "guided" version of the data will be superficially separate from the raw data chart. Design must await implementation on that front.

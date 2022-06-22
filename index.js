@@ -23,13 +23,13 @@ const query = {
   }
 }
 var dataset = {};
-EuroJSONstat.fetchQuery(query, false).then(eq=> {
+EuroJSONstat.fetchQuery(query, false).then(eq => {
   if (eq.class === "error")
-  console.log(eq)
+    console.log(eq)
 })
 
-EuroJSONstat.fetchDataset(query).then(ds=>{
-  if(ds.class==="dataset"){
+EuroJSONstat.fetchDataset(query).then(ds => {
+  if (ds.class === "dataset") {
     dataset = ds
     console.log(ds.label)
     // console.log(JSONstat(dataset).Data({"geo" : "SE"}))
@@ -46,51 +46,47 @@ async function run() {
     await mongo.connect();
     const database = mongo.db('how_is_earth')
     const earthDB = database.collection('earthDB')
-    const filter = {"dataset": "eurostat"}
-
-    console.log(JSONstat(dataset).extension.datasetId)
     var updateDoc = []
-    const geoSet = JSONstat(dataset).Data()
-    const years = JSONstat(dataset).Dimension("time")
-    const geo = JSONstat(dataset).Dimension("geo")
 
-    
-    for (let i = 0;i<geo.length;i++) {
+    console.log(JSONstat(dataset).extension.datasetId);
+    const geoSet = JSONstat(dataset).Data();
+    const years = JSONstat(dataset).Dimension("time");
+    const geo = JSONstat(dataset).Dimension("geo");
+
+
+    for (let i = 0; i < geo.length; i++) {
       // Iterate through the "geo" dimensions (list of countries in the data),
-      let jStat = JSONstat(dataset).Dimension("geo").id[i]
-
-      updateDoc[i] = {
+      let jStat = JSONstat(dataset).Dimension("geo").id[i];
+      const filter = {
         datasetId: JSONstat(dataset).extension.datasetId,
         geo: jStat,
         country: JSONstat(dataset).Dimension("geo").__tree__.category.label[jStat],
-        label: JSONstat(dataset).label
+        label: JSONstat(dataset).label,
+        data: [],
       }
 
-      let doc = updateDoc[i]
-      doc.data = []
+      updateDoc = []
 
       for (let i = 0; i < years.length; i++) {
         // Iterate through the years 
         // build an object with values relevant to the charts
         // push that object into an array
-        doc.data.push({
+        updateDoc.push({
           time: years.id[i],
           value: geoSet[i].value,
           status: geoSet[i].status,
-        })
-      }
-
+        });
+      };
+      const result = await earthDB.updateOne(filter, { $set: { data: updateDoc } }, { upsert: true })
     }
-    
-    const result = await earthDB.updateOne(filter, {$set: {EU:updateDoc}}, {upsert: true})
 
-    const reveal = await earthDB.findOne({ dataset: "eurostat" })
-    console.log(reveal)
+
+    // const reveal = await earthDB.findOne({ geo: "SE", datasetId: "sdg_13_10" })
 
   } catch (error) {
     console.log(error)
   }
-    finally {
+  finally {
     await mongo.close()
     console.log("============= DB DISCONNECTED ================")
   }
@@ -123,15 +119,12 @@ io.on("connection", (socket) => {
         await mongo.connect();
         const database = mongo.db('how_is_earth');
         const earthDB = database.collection('earthDB');
-        const filter = {"dataset": "sdg_13_10"}
+        const filter = { datasetId: "sdg_13_10", geo:"SE" }
 
         data = await earthDB.findOne(filter);
       } finally {
-        result = {
-          "values": JSONstat(data.sdg_13_10).Data({"geo" : "SE"}),
-          "labels": JSONstat(data.sdg_13_10).Dimension("time"),
-        }
-        socket.emit("data", result);
+        console.log(data)
+        socket.emit("data", data);
         await mongo.close();
       }
     }

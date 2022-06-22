@@ -5,23 +5,27 @@ import { SocketContext, socket } from "./components/context/socket";
 import Button from "./components/UI/Button"
 
 function App() {
-  const [dataset, setDataset] = useState({})
+  const [dataset, setDataset] = useState([])
   const getDataHandler = (event) => {
     socket.emit("data")
     console.log("sending")
   }
-  console.log(dataset)
 
   useEffect(() => {
-    socket.on("data", (event) => {
-      console.log(event)
-      setDataset({...dataset, data: event})
-    })
-  },[])
+      socket.on("data", (event) => {
+          if (dataset.indexOf(event)) {
+              let newDataset = dataset;
+              newDataset.push(event.data);
+              setDataset( newDataset );
+              console.log(dataset[0])
+          }
+      })
+  }, [])
+
   return (
     <SocketContext.Provider value={socket} className="app" >
       <Button clickMe={getDataHandler} />
-      <RenderChart />
+      <RenderChart chartData={dataset}/>
     </SocketContext.Provider>
   );
 }

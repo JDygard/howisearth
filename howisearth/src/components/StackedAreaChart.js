@@ -167,7 +167,6 @@ const chartData = [
 
 const RenderChart = props => {
     const socket = useContext(SocketContext);
-    console.log(props)
 
     return (
         <LineChart width={1000} height={500} data={props.chartData[0]}>

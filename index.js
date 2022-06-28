@@ -11,10 +11,205 @@ import * as EuroJSONstat from "jsonstat-euro"
 
 const app = express();
 
-// =============================== Sockets
-// =============================== Sockets END
-
 // =============================== REST Request ====================
+const queryList = [
+  // Population totals
+  {
+    "dataset": "demo_pjan",
+    "filter": {
+      age: "TOTAL",
+      sex: "T"
+    }
+  },
+  // Projected population totals
+  {
+    "dataset": "proj_19np",
+    "filter": {
+      age: "TOTAL",
+      sex: "T",
+      projection: "BSL",
+    }
+  },
+  // GDP per capita
+  {
+    "dataset": "nama_10_pc",
+    "filter": {
+      unit: "CP_EUR_HAB",
+      na_item: "BIGQ",
+    }
+  },
+  // Total GDP
+  {
+    "dataset": "nama_10_gdp",
+    "filter": {
+      unit: "CP_MEUR",
+      na_item: "BIGQ",
+    }
+  },
+  // Timber reserves by forested area
+  {
+    "dataset": "for_area",
+    "filter": {
+      indic_fo: "FOR",
+    }
+  },
+  // Timber by volume
+  {
+    "dataset": "for_vol",
+    "filter": {
+      indic_fo: "FOR",
+    }
+  },
+  // Total greenhouse gas emissions per capita
+  {
+    "dataset": "sdg_13_10",
+    "filter": {
+      src_crf: "TOTXMEMONIA",
+      unit: "T_HAB"
+    }
+  },
+  // Greenhouse gas emissions per capita by source
+  { 
+    "dataset": "env_ac_ainah_r2",
+    "filter": {
+      airpol: "GHG",
+      nace_r2: "A",
+      unit: "KG_HAB",
+    }
+  },
+  { 
+    "dataset": "env_ac_ainah_r2",
+    "filter": {
+      airpol: "GHG",
+      nace_r2: "B",
+      unit: "KG_HAB",
+    }
+  },
+  { 
+    "dataset": "env_ac_ainah_r2",
+    "filter": {
+      airpol: "GHG",
+      nace_r2: "C",
+      unit: "KG_HAB",
+    }
+  },
+  { 
+    "dataset": "env_ac_ainah_r2",
+    "filter": {
+      airpol: "GHG",
+      nace_r2: "D",
+      unit: "KG_HAB",
+    }
+  },
+
+  // Waste generation per capita
+  { 
+    "dataset": "env_wasgen",
+    "filter": {
+      unit: "KG_HAB",
+      hazard: "HAZ_NHAZ",
+      nace_r2: "TOTAL_HH",
+      waste: "W101",
+    } 
+  },
+  { 
+    "dataset": "env_wasgen",
+    "filter": {
+      unit: "KG_HAB",
+      hazard: "HAZ_NHAZ",
+      nace_r2: "TOTAL_HH",
+      waste: "TOTAL",
+    } 
+  },
+  // Energy production capacity: Renewables
+  { 
+    "dataset": "nrg_inf_epcrw",
+    "filter": {
+      siec: "RA100", // Hydro
+    } 
+  },
+  { 
+    "dataset": "nrg_inf_epcrw",
+    "filter": {
+      siec: "RA200", // Geothermal
+    } 
+  },
+  { 
+    "dataset": "nrg_inf_epcrw",
+    "filter": {
+      siec: "RA300", // Wind
+    } 
+  },
+  { 
+    "dataset": "nrg_inf_epcrw",
+    "filter": {
+      siec: "RA400", // Solar
+    } 
+  },
+  { 
+    "dataset": "nrg_inf_epcrw",
+    "filter": {
+      siec: "RA500", // Tide/wave/ocean
+    } 
+  },
+  { 
+    "dataset": "nrg_inf_epcrw",
+    "filter": {
+      siec: "W6000", //Waste
+    } 
+  },
+  // Share of energy from renewable sources
+  { 
+    "dataset": "nrg_ind_ren",
+    "filter": {
+      nrg_bal: "REN",
+    } 
+  },
+  //Production of electricity and derived heat by type of fuel 
+  { 
+    "dataset": "nrg_bal_peh",
+    "filter": {
+      nrg_bal: "GEP",
+      siec: "C0000X0350-0370",
+    } 
+  },
+  { 
+    "dataset": "nrg_bal_peh",
+    "filter": {
+      nrg_bal: "GEP",
+      siec: "C0350-0370",
+    } 
+  },
+  { 
+    "dataset": "nrg_bal_peh",
+    "filter": {
+      nrg_bal: "GEP",
+      siec: "FE",
+    } 
+  },
+  { 
+    "dataset": "nrg_bal_peh",
+    "filter": {
+      nrg_bal: "GEP",
+      siec: "N900H",
+    } 
+  },
+  { 
+    "dataset": "nrg_bal_peh",
+    "filter": {
+      nrg_bal: "GEP",
+      siec: "TOTAL",
+    } 
+  },
+  { 
+    "dataset": "nrg_bal_peh",
+    "filter": {
+      nrg_bal: "GEP",
+      siec: "O4000XBIO",
+    } 
+  },
+]
+
 const query = {
   "dataset": "sdg_13_10",
   "filter": {
@@ -22,7 +217,9 @@ const query = {
     unit: "T_HAB",
   }
 }
+
 var dataset = {};
+
 EuroJSONstat.fetchQuery(query, false).then(eq => {
   if (eq.class === "error")
     console.log(eq)
@@ -40,58 +237,67 @@ EuroJSONstat.fetchDataset(query).then(ds => {
 // ============================= DB ==================================
 const uri = process.env.MONGODB;
 const mongo = new MongoClient(uri);
+const database = mongo.db('how_is_earth');
+const earthDB = database.collection('earthDB');
 
 async function run() {
   try {
     await mongo.connect();
-    const database = mongo.db('how_is_earth')
-    const earthDB = database.collection('earthDB')
-    var updateDoc = []
 
-    console.log(JSONstat(dataset).extension.datasetId);
+    const datasetIDFilter = { label: "datasetIDList", data: [] };
+    const datasetIDListDB = await earthDB.findOne(datasetIDFilter);
+
     const geoSet = JSONstat(dataset).Data();
     const years = JSONstat(dataset).Dimension("time");
     const geo = JSONstat(dataset).Dimension("geo");
+
+    var updateDoc = [];
+    var datasetIDList;
 
 
     for (let i = 0; i < geo.length; i++) {
       // Iterate through the "geo" dimensions (list of countries in the data),
       let jStat = JSONstat(dataset).Dimension("geo").id[i];
-      const filter = {
-        datasetId: JSONstat(dataset).extension.datasetId,
-        geo: jStat,
-        country: JSONstat(dataset).Dimension("geo").__tree__.category.label[jStat],
-        label: JSONstat(dataset).label,
-        data: [],
-      }
+      updateDoc = [];
 
-      updateDoc = []
+
 
       for (let i = 0; i < years.length; i++) {
         // Iterate through the years 
-        // build an object with values relevant to the charts
+        // build an object with values relevant to Recharts
         // push that object into an array
         updateDoc.push({
           time: years.id[i],
           value: geoSet[i].value,
           status: geoSet[i].status,
         });
+        datasetIDList = JSONstat(dataset).extension.datasetId;
       };
-      const result = await earthDB.updateOne(filter, { $set: { data: updateDoc } }, { upsert: true })
+
+      const filter = {
+        datasetId: JSONstat(dataset).extension.datasetId,
+        geo: jStat,
+        country: JSONstat(dataset).Dimension("geo").__tree__.category.label[jStat],
+        label: JSONstat(dataset).label,
+        data: updateDoc,
+      };
+
+      await earthDB.updateOne(filter, { $set: { data: updateDoc } }, { upsert: true });
+      if (datasetIDListDB.data.find(datasetIDList)) {
+        await earthDB.updateOne(datasetIDFilter, { $set: { data: [...datasetIDListDB.data, datasetIDList] } }, { upsert: true });
+      };
     }
-
-
-    // const reveal = await earthDB.findOne({ geo: "SE", datasetId: "sdg_13_10" })
-
+    let log = await earthDB.findOne({ label: "datasetIDList" }).data.then(console.log(log.data));
   } catch (error) {
-    console.log(error)
+    console.log(error);
   }
+
   finally {
-    await mongo.close()
+    await mongo.close();
     console.log("============= DB DISCONNECTED ================")
-  }
-}
-run().catch(console.dir)
+  };
+};
+run().catch(console.dir);
 
 
 // =============================== Get data from DB and check for freshness
@@ -110,6 +316,18 @@ const io = new Server(httpServer, {
   }
 });
 
+const datasetIDQuery = () => {
+  async function run() {
+    try {
+      await mongo.connect();
+      const filter = { label: "datasetIDList" }
+
+    } finally {
+      await mongo.close();
+    }
+  }
+}
+
 io.on("connection", (socket) => {
   socket.on("data", () => {
     var result = {}
@@ -117,13 +335,10 @@ io.on("connection", (socket) => {
     async function run() {
       try {
         await mongo.connect();
-        const database = mongo.db('how_is_earth');
-        const earthDB = database.collection('earthDB');
-        const filter = { datasetId: "sdg_13_10", geo:"SE" }
+        const filter = { datasetId: "sdg_13_10", geo: "SE" }
 
         data = await earthDB.findOne(filter);
       } finally {
-        console.log(data)
         socket.emit("data", data);
         await mongo.close();
       }

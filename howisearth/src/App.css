@@ -1,38 +1,112 @@
-.App {
-  text-align: center;
+* {
+  box-sizing: border-box;
 }
 
-.App-logo {
-  height: 40vmin;
-  pointer-events: none;
+body {
+  margin: 0;
 }
 
-@media (prefers-reduced-motion: no-preference) {
-  .App-logo {
-    animation: App-logo-spin infinite 20s linear;
-  }
-}
-
-.App-header {
-  background-color: #282c34;
-  min-height: 100vh;
+.layout {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  font-size: calc(10px + 2vmin);
-  color: white;
+  align-items: stretch;
+  min-height: 100vh;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: #1f2933;
 }
 
-.App-link {
-  color: #61dafb;
+/* ---- Sidebar ---- */
+.sidebar {
+  flex: 0 0 264px;
+  max-width: 264px;
+  max-height: 100vh;
+  overflow-y: auto;
+  padding: 20px 18px;
+  border-right: 1px solid #e5e7eb;
+  background: #fafafa;
 }
 
-@keyframes App-logo-spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.brand {
+  margin: 0 0 20px;
+  font-size: 1.25rem;
+}
+
+.picker {
+  margin-bottom: 24px;
+}
+
+.picker__head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+
+.picker h2 {
+  margin: 0 0 10px;
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #6b7280;
+}
+
+.pills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pill {
+  border: 1px solid #d1d5db;
+  background: #fff;
+  color: #374151;
+  border-radius: 999px;
+  padding: 5px 11px;
+  font-size: 0.82rem;
+  line-height: 1.2;
+  cursor: pointer;
+  transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.pill:hover {
+  border-color: #9ca3af;
+  background: #f3f4f6;
+}
+
+.pill--active,
+.pill--active:hover {
+  background: #4f46e5;
+  border-color: #4f46e5;
+  color: #fff;
+}
+
+.link {
+  border: none;
+  background: none;
+  color: #4f46e5;
+  font-size: 0.78rem;
+  cursor: pointer;
+  padding: 0;
+}
+
+/* ---- Chart area ---- */
+.chart-area {
+  flex: 1 1 auto;
+  min-width: 0; /* lets the responsive chart shrink inside the flex row */
+  padding: 24px 28px;
+}
+
+.metric-title {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.status {
+  color: #6b7280;
+  font-style: italic;
+}
+
+.chart-empty {
+  padding: 48px 0;
+  text-align: center;
+  color: #9ca3af;
 }

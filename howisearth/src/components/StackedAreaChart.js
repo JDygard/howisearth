@@ -1,181 +1,50 @@
-import { LineChart, Line, CartesianGrid, XAxis, YAxis } from 'recharts';
-import { useState, useEffect, useContext } from 'react';
-import { SocketContext } from './context/socket';
-import React from 'react';
-// European countries
-// Request: "http://ec.europa.eu/eurostat/wdds/rest/data/v2.1/json/en/nama_10_gdp?geo=EU28&precision=1&na_item=B1GQ&unit=CP_MEUR&time=2010&time=2011"
-// Query: "en/nama_10_gdp?geo=EU28&precision=1&na_item=B1GQ&unit=CP_MEUR&time=2010&time=2011"
-// USA/States: EIA website, go figure that shit out :P
+import {
+  ResponsiveContainer,
+  LineChart,
+  Line,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Legend,
+} from 'recharts';
 
-const chartData = [
-    {
-      "time": "1990",
-      "value": 8.8,
-      "status": null
-    },
-    {
-      "time": "1991",
-      "value": 8.5,
-      "status": null
-    },
-    {
-      "time": "1992",
-      "value": 8.3,
-      "status": null
-    },
-    {
-      "time": "1993",
-      "value": 8.2,
-      "status": null
-    },
-    {
-      "time": "1994",
-      "value": 8.2,
-      "status": null
-    },
-    {
-      "time": "1995",
-      "value": 8.5,
-      "status": null
-    },
-    {
-      "time": "1996",
-      "value": 9.2,
-      "status": null
-    },
-    {
-      "time": "1997",
-      "value": 8.1,
-      "status": null
-    },
-    {
-      "time": "1998",
-      "value": 8.2,
-      "status": null
-    },
-    {
-      "time": "1999",
-      "value": 7.7,
-      "status": null
-    },
-    {
-      "time": "2000",
-      "value": 8.1,
-      "status": null
-    },
-    {
-      "time": "2001",
-      "value": 8.2,
-      "status": null
-    },
-    {
-      "time": "2002",
-      "value": 9,
-      "status": null
-    },
-    {
-      "time": "2003",
-      "value": 10.8,
-      "status": null
-    },
-    {
-      "time": "2004",
-      "value": 10.2,
-      "status": null
-    },
-    {
-      "time": "2005",
-      "value": 10.1,
-      "status": null
-    },
-    {
-      "time": "2006",
-      "value": 10.5,
-      "status": null
-    },
-    {
-      "time": "2007",
-      "value": 10.1,
-      "status": null
-    },
-    {
-      "time": "2008",
-      "value": 10.2,
-      "status": null
-    },
-    {
-      "time": "2009",
-      "value": 9.5,
-      "status": null
-    },
-    {
-      "time": "2010",
-      "value": 9.9,
-      "status": null
-    },
-    {
-      "time": "2011",
-      "value": 9.5,
-      "status": null
-    },
-    {
-      "time": "2012",
-      "value": 9.2,
-      "status": null
-    },
-    {
-      "time": "2013",
-      "value": 9.3,
-      "status": null
-    },
-    {
-      "time": "2014",
-      "value": 8.9,
-      "status": null
-    },
-    {
-      "time": "2015",
-      "value": 9.1,
-      "status": null
-    },
-    {
-      "time": "2016",
-      "value": 9.1,
-      "status": null
-    },
-    {
-      "time": "2017",
-      "value": 9.2,
-      "status": null
-    },
-    {
-      "time": "2018",
-      "value": 8.8,
-      "status": null
-    },
-    {
-      "time": "2019",
-      "value": 9,
-      "status": null
-    },
-    {
-      "time": "2020",
-      "value": 8.2,
-      "status": null
-    }
-  ]
+// A colour per line; cycles if there are more series than colours.
+const COLORS = [
+  '#4f46e5', '#16a34a', '#ea580c', '#0891b2',
+  '#dc2626', '#9333ea', '#ca8a04', '#0d9488',
+];
 
-const RenderChart = props => {
-    const socket = useContext(SocketContext);
+// One line per series. `chartData` is an array of rows keyed by year (see
+// App.js); `series` lists the keys to draw. ResponsiveContainer lets the chart
+// fill whatever width the layout gives it; connectNulls keeps biennial/sparse
+// series (e.g. waste) from breaking into disconnected dots.
+const RenderChart = ({ chartData = [], series = [] }) => {
+  if (chartData.length === 0 || series.length === 0) {
+    return <p className="chart-empty">Pick a country from the sidebar to plot it.</p>;
+  }
 
-    return (
-        <LineChart width={1000} height={500} data={props.chartData[0]}>
-            <Line type="monotone" dataKey="value" stroke="#8884d8" />
-            <CartesianGrid stroke="#ccc" />
-            <XAxis dataKey="time" />
-            <YAxis />
-        </LineChart>
-    );
-}
+  return (
+    <ResponsiveContainer width="100%" height={520}>
+      <LineChart data={chartData} margin={{ top: 8, right: 24, bottom: 8, left: 8 }}>
+        <CartesianGrid stroke="#eee" />
+        <XAxis dataKey="time" />
+        <YAxis />
+        <Tooltip />
+        <Legend />
+        {series.map((key, i) => (
+          <Line
+            key={key}
+            type="monotone"
+            dataKey={key}
+            stroke={COLORS[i % COLORS.length]}
+            dot={false}
+            connectNulls
+          />
+        ))}
+      </LineChart>
+    </ResponsiveContainer>
+  );
+};
 
 export default RenderChart;

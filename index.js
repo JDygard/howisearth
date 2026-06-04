@@ -1,418 +1,249 @@
-import express, { query } from 'express';
+import express from 'express';
 import path from 'path';
 import { MongoClient } from 'mongodb';
-import { createServer } from "http";
-import http from 'http';
-import { Server } from "socket.io";
+import { createServer } from 'http';
+import { Server } from 'socket.io';
 import 'dotenv/config';
 
-import JSONstat from "jsonstat-toolkit";
-import * as EuroJSONstat from "jsonstat-euro"
+import { queryList } from './lib/queries.js';
+import { fetchDataset, isEmpty } from './lib/eurostat.js';
+import { datasetToSeries, hasObservations } from './lib/transform.js';
+import { makeMetricId, buildDisplay } from './lib/metrics.js';
+import { isStale, createRefresher } from './lib/freshness.js';
 
-const app = express();
+const PORT = process.env.PORT || 4000;
 const uri = process.env.MONGODB;
+
+// How old (in days) a metric's data may be before a read triggers a refresh.
+// Eurostat datasets update a few times a year, so a week is plenty by default.
+const FRESHNESS_MS = (Number(process.env.FRESHNESS_DAYS) || 7) * 24 * 60 * 60 * 1000;
+
+if (!uri) {
+  console.error('Missing MONGODB connection string. Add MONGODB=... to a .env file.');
+  process.exit(1);
+}
+
 const mongo = new MongoClient(uri);
 const database = mongo.db('how_is_earth');
 const earthDB = database.collection('earthDB');
 
-// =============================== REST Request ====================
-const queryList = [
-  // Population totals
-  {
-    "dataset": "demo_pjan",
-    "filter": {
-      age: "TOTAL",
-      sex: "T"
-    }
-  },
-  // Projected population totals
-  {
-    "dataset": "proj_19np",
-    "filter": {
-      age: "TOTAL",
-      sex: "T",
-      projection: "BSL",
-    }
-  },
-  // GDP per capita
-  {
-    "dataset": "nama_10_pc",
-    "filter": {
-      unit: "CP_EUR_HAB",
-      na_item: "BIGQ",
-    }
-  },
-  // Total GDP
-  {
-    "dataset": "nama_10_gdp",
-    "filter": {
-      unit: "CP_MEUR",
-      na_item: "BIGQ",
-    }
-  },
-  // Timber reserves by forested area
-  {
-    "dataset": "for_area",
-    "filter": {
-      indic_fo: "FOR",
-    }
-  },
-  // Timber by volume
-  {
-    "dataset": "for_vol",
-    "filter": {
-      indic_fo: "FOR",
-    }
-  },
-  // Total greenhouse gas emissions per capita
-  {
-    "dataset": "sdg_13_10",
-    "filter": {
-      src_crf: "TOTXMEMONIA",
-      unit: "T_HAB"
-    }
-  },
-  // Greenhouse gas emissions per capita by source
-  {
-    "dataset": "env_ac_ainah_r2",
-    "filter": {
-      airpol: "GHG",
-      nace_r2: "A",
-      unit: "KG_HAB",
-    }
-  },
-  {
-    "dataset": "env_ac_ainah_r2",
-    "filter": {
-      airpol: "GHG",
-      nace_r2: "B",
-      unit: "KG_HAB",
-    }
-  },
-  {
-    "dataset": "env_ac_ainah_r2",
-    "filter": {
-      airpol: "GHG",
-      nace_r2: "C",
-      unit: "KG_HAB",
-    }
-  },
-  {
-    "dataset": "env_ac_ainah_r2",
-    "filter": {
-      airpol: "GHG",
-      nace_r2: "D",
-      unit: "KG_HAB",
-    }
-  },
+// metricId -> query, so an on-read refresh can find the right Eurostat call.
+const queryByMetricId = new Map(queryList.map((q) => [makeMetricId(q.dataset, q.filter), q]));
 
-  // Waste generation per capita
-  {
-    "dataset": "env_wasgen",
-    "filter": {
-      unit: "KG_HAB",
-      hazard: "HAZ_NHAZ",
-      nace_r2: "TOTAL_HH",
-      waste: "W101",
-    }
-  },
-  {
-    "dataset": "env_wasgen",
-    "filter": {
-      unit: "KG_HAB",
-      hazard: "HAZ_NHAZ",
-      nace_r2: "TOTAL_HH",
-      waste: "TOTAL",
-    }
-  },
-  // Energy production capacity: Renewables
-  {
-    "dataset": "nrg_inf_epcrw",
-    "filter": {
-      siec: "RA100", // Hydro
-    }
-  },
-  {
-    "dataset": "nrg_inf_epcrw",
-    "filter": {
-      siec: "RA200", // Geothermal
-    }
-  },
-  {
-    "dataset": "nrg_inf_epcrw",
-    "filter": {
-      siec: "RA300", // Wind
-    }
-  },
-  {
-    "dataset": "nrg_inf_epcrw",
-    "filter": {
-      siec: "RA400", // Solar
-    }
-  },
-  {
-    "dataset": "nrg_inf_epcrw",
-    "filter": {
-      siec: "RA500", // Tide/wave/ocean
-    }
-  },
-  {
-    "dataset": "nrg_inf_epcrw",
-    "filter": {
-      siec: "W6000", //Waste
-    }
-  },
-  // Share of energy from renewable sources
-  {
-    "dataset": "nrg_ind_ren",
-    "filter": {
-      nrg_bal: "REN",
-    }
-  },
-  //Production of electricity and derived heat by type of fuel 
-  {
-    "dataset": "nrg_bal_peh",
-    "filter": {
-      nrg_bal: "GEP",
-      siec: "C0000X0350-0370",
-    }
-  },
-  {
-    "dataset": "nrg_bal_peh",
-    "filter": {
-      nrg_bal: "GEP",
-      siec: "C0350-0370",
-    }
-  },
-  {
-    "dataset": "nrg_bal_peh",
-    "filter": {
-      nrg_bal: "GEP",
-      siec: "FE",
-    }
-  },
-  {
-    "dataset": "nrg_bal_peh",
-    "filter": {
-      nrg_bal: "GEP",
-      siec: "N900H",
-    }
-  },
-  {
-    "dataset": "nrg_bal_peh",
-    "filter": {
-      nrg_bal: "GEP",
-      siec: "TOTAL",
-    }
-  },
-  {
-    "dataset": "nrg_bal_peh",
-    "filter": {
-      nrg_bal: "GEP",
-      siec: "O4000XBIO",
-    }
-  },
-]
+// =============================== Ingestion ====================
+// Fetch one dataset from Eurostat and upsert one document per country that
+// actually has data, pruning any countries that previously did but no longer.
+async function fetchAndSave(query) {
+  const ds = await fetchDataset(query);
 
-const saveDataset = async function (dataset, queryFilter) {
-  // Function for updating a single dataset, processing it, and putting it in the database
-  try {
-    const geoSet = JSONstat(dataset).Data();
-    const years = JSONstat(dataset).Dimension("time");
-    const geo = JSONstat(dataset).Dimension("geo");
+  if (!ds || ds.class !== 'dataset') {
+    console.error(`  fetch failed for ${query.dataset}: not a dataset`);
+    return;
+  }
+  if (isEmpty(ds)) {
+    // HTTP 200 but no observations - almost always a stale/invalid filter code.
+    console.warn(`  no data for ${query.dataset} ${JSON.stringify(query.filter)} - check filter codes`);
+    return;
+  }
 
-    var updateDoc = [];
+  const metricId = makeMetricId(query.dataset, query.filter);
+  const allCountries = datasetToSeries(ds, query.dataset);
+  // Only keep countries with at least one real observation, so the selector
+  // never offers an empty series.
+  const docs = allCountries.filter(hasObservations);
+  const keptGeos = docs.map((doc) => doc.geo);
 
-    for (let i = 0; i < geo.length; i++) {
-      // Loop for creating each database entry
-      let jStat = JSONstat(dataset).Dimension("geo").id[i];
-
-      for (let i = 0; i < years.length; i++) {
-        // Loop for creating each entry for the data array
-        updateDoc.push({
-          time: years.id[i],
-          value: geoSet[i].value,
-          status: geoSet[i].status,
-        });
-      }
-
-      const filter = {
-        datasetId: JSONstat(dataset).extension.datasetId,
-        geo: jStat,
-        filter: queryFilter,
-      }
-      const update = {
+  const ops = docs.map((doc) =>
+    earthDB.updateOne(
+      { metricId, geo: doc.geo },
+      {
         $set: {
-          label: JSONstat(dataset).label,
+          metricId,
+          datasetId: doc.datasetId,
+          filter: query.filter,
+          label: doc.label,
+          country: doc.country,
           date: Date.now(),
-          data: updateDoc,
-          country: JSONstat(dataset).Dimension("geo").__tree__.category.label[jStat],
-        }
-      }
-      earthDB.updateOne(filter, update, { upsert: true })
-    }
-  }
-  catch (err) {
-    console.log("saveDataset(): " + err)
-    console.log("saveDataset(): " + JSON.stringify(queryFilter))
-  }
-  finally {
-    console.log(JSONstat(dataset).label + " complete.")
-    console.log("------------------------------------------------------")
-  }
-}
-// saveDataset().catch(console.dir);
+          data: doc.data,
+        },
+      },
+      { upsert: true }
+    )
+  );
+  await Promise.all(ops);
 
-const euroJSONQuery = (query) => {
-  EuroJSONstat.fetchDataset(query, saveDataset).then(ds => {
-    if (ds.class === "dataset") {
-      saveDataset(ds, query.filter);
-    }
-  })
+  // Remove any stored rows for this metric that are no longer present/non-empty
+  // (clears out empties written before this filter existed).
+  await earthDB.deleteMany({ metricId, geo: { $nin: keptGeos } });
+
+  console.log(`  saved ${ds.label} (${docs.length}/${allCountries.length} countries have data)`);
 }
 
-// Update the full list of datasets at application launch
-
-function run() {
-  console.log("Function run")
-  mongo.connect();
-  for (let i = 0; i < queryList.length; i++) {
-    euroJSONQuery(queryList[i], saveDataset);
-  }
-  mongo.close();
-  console.log("============DB CONNECTION CLOSED===========")
-  //     console.log(eq)
-  //   }
-  // })
-
-  // EuroJSONstat.fetchDataset(queryList[i].filter).then(ds => {
-  //   if (ds.class === "dataset") {
-  //     dataset = ds
-  //     console.log(ds.label)
-  //   }
-  // })
-}
-run();
-
-
-// ============================== END REST Request =================s
-
-// ============================= DB ==================================
-
-// async function run() {
-//   try {
-//     await mongo.connect();
-
-//     const datasetIDFilter = { label: "datasetIDList", data: [] };
-//     const datasetIDListDB = await earthDB.findOne(datasetIDFilter);
-
-//     const geoSet = JSONstat(dataset).Data();
-//     const years = JSONstat(dataset).Dimension("time");
-//     const geo = JSONstat(dataset).Dimension("geo");
-
-//     var updateDoc = [];
-//     var datasetIDList;
-
-
-//     for (let i = 0; i < geo.length; i++) {
-//       // Iterate through the "geo" dimensions (list of countries in the data),
-//       let jStat = JSONstat(dataset).Dimension("geo").id[i];
-//       updateDoc = [];
-
-//       for (let i = 0; i < years.length; i++) {
-//         // Iterate through the years 
-//         // build an object with values relevant to Recharts
-//         // push that object into an array
-//         updateDoc.push({
-//           time: years.id[i],
-//           value: geoSet[i].value,
-//           status: geoSet[i].status,
-//         });
-//         datasetIDList = JSONstat(dataset).extension.datasetId;
-//       };
-
-//       const filter = {
-//         datasetId: JSONstat(dataset).extension.datasetId,
-//         geo: jStat,
-//         country: JSONstat(dataset).Dimension("geo").__tree__.category.label[jStat],
-//         label: JSONstat(dataset).label,
-//         data: updateDoc,
-//       };
-
-//       await earthDB.updateOne(filter, { $set: { data: updateDoc } }, { upsert: true });
-//       if (datasetIDListDB.data.find(datasetIDList)) {
-//         await earthDB.updateOne(datasetIDFilter, { $set: { data: [...datasetIDListDB.data, datasetIDList] } }, { upsert: true });
-//       };
-//     }
-//     let log = await earthDB.findOne({ label: "datasetIDList" }).data.then(console.log(log.data));
-//   } catch (error) {
-//     console.log(error);
-//   }
-
-//   finally {
-//     await mongo.close();
-//     console.log("============= DB DISCONNECTED ================")
-//   };
-// };
-// run().catch(console.dir);
-
-
-// =============================== Get data from DB and check for freshness
-// =============================== Optionally refresh DB data
-// =============================== Prepare collected or freshened data
-// =============================== Socket the data out
-
-// =============================== END DB ==========================
-
-app.use(express.static('howisearth/build/'));
-
-const httpServer = createServer();
-const io = new Server(httpServer, {
-  cors: {
-    origin: ["http://localhost:4003", "http://localhost:4000"],
-  }
-});
-
-const datasetIDQuery = () => {
-  async function run() {
+// Refresh every dataset. Sequential so we don't hammer the Eurostat API, and
+// fully awaited so the DB connection is never closed mid-write.
+async function ingestAll() {
+  console.log(`Refreshing ${queryList.length} datasets from Eurostat...`);
+  for (const query of queryList) {
     try {
-      await mongo.connect();
-      const filter = { label: "datasetIDList" }
-
-    } finally {
-      await mongo.close();
+      await fetchAndSave(query);
+    } catch (err) {
+      console.error(`  error on ${query.dataset}: ${err.message}`);
     }
+  }
+  console.log('Ingestion complete.');
+}
+
+// Re-fetch a single metric by id (one Eurostat call covers all its countries).
+// Resolves to true on success, false if the id is unknown or the fetch fails -
+// it never rejects, so background callers can't raise unhandled rejections.
+async function refreshOne(metricId) {
+  const query = queryByMetricId.get(metricId);
+  if (!query) return false;
+  try {
+    await fetchAndSave(query);
+    return true;
+  } catch (err) {
+    console.error(`  refresh failed for ${metricId}: ${err.message}`);
+    return false;
   }
 }
 
-io.on("connection", (socket) => {
-  socket.on("data", () => {
-    var result = {}
-    var data = {}
-    async function run() {
+// De-duplicated refresher: concurrent requests for the same metric share one
+// in-flight download.
+const { refreshMetric } = createRefresher(refreshOne);
+
+// =============================== Catalog (for the selector UI) ====================
+// What metrics and countries do we actually have data for? Derived from the DB
+// (which now holds only non-empty series), and each metric carries the exact
+// set of countries it has - so the UI can narrow the country list per metric
+// and never offer a combination that returns nothing.
+async function getCatalog() {
+  const metricsAgg = await earthDB
+    .aggregate([
+      {
+        $group: {
+          _id: '$metricId',
+          datasetId: { $first: '$datasetId' },
+          filter: { $first: '$filter' },
+          label: { $first: '$label' },
+          geos: { $addToSet: '$geo' },
+        },
+      },
+    ])
+    .toArray();
+
+  const metrics = metricsAgg
+    .map((m) => ({
+      id: m._id,
+      datasetId: m.datasetId,
+      display: buildDisplay(m.label, m.filter),
+      geos: m.geos.sort(),
+    }))
+    .sort((a, b) => a.display.localeCompare(b.display));
+
+  const countriesAgg = await earthDB
+    .aggregate([{ $group: { _id: '$geo', country: { $first: '$country' } } }])
+    .toArray();
+
+  const countries = countriesAgg
+    .map((c) => ({ geo: c._id, country: c.country || c._id }))
+    .sort((a, b) => a.country.localeCompare(b.country));
+
+  return { metrics, countries };
+}
+
+function withDisplay(doc) {
+  doc.display = buildDisplay(doc.label, doc.filter);
+  return doc;
+}
+
+// Stale-while-revalidate read for one metric + country. Returns the document to
+// serve now plus, when a stale copy was served, the in-flight refresh promise
+// so the caller can push fresh data once it lands.
+//  - Hit & fresh:  return it, no revalidation.
+//  - Hit & stale:  return it now; revalidation refreshes for next time.
+//  - Miss:         treat as infinitely stale - wait for a fetch, then return.
+// Always falls back to whatever we have (even stale) if a refresh fails.
+async function getSeries(metricId, geo) {
+  let doc = await earthDB.findOne({ metricId, geo });
+
+  if (doc && !isStale(doc, FRESHNESS_MS)) {
+    return { doc: withDisplay(doc), revalidation: null };
+  }
+
+  if (doc) {
+    return { doc: withDisplay(doc), revalidation: refreshMetric(metricId) };
+  }
+
+  const ok = await refreshMetric(metricId);
+  if (ok) doc = await earthDB.findOne({ metricId, geo });
+  return { doc: doc ? withDisplay(doc) : null, revalidation: null };
+}
+
+// =============================== Server ====================
+async function start() {
+  await mongo.connect();
+  console.log('Connected to MongoDB.');
+
+  // Optional bulk warm-up. Data also self-refreshes on read now, so this is
+  // mainly for seeding the catalog and pre-filling everything in one go.
+  if (process.env.INGEST === 'true') {
+    await ingestAll();
+  }
+
+  const app = express();
+  app.use(express.static('howisearth/build'));
+
+  const httpServer = createServer(app);
+  const io = new Server(httpServer, {
+    cors: { origin: ['http://localhost:3000', `http://localhost:${PORT}`] },
+  });
+
+  io.on('connection', (socket) => {
+    socket.on('catalog', async () => {
       try {
-        await mongo.connect();
-        const filter = { datasetId: "sdg_13_10", geo: "SE" }
-
-        data = await earthDB.findOne(filter);
-      } finally {
-        socket.emit("data", data);
-        await mongo.close();
+        socket.emit('catalog', await getCatalog());
+      } catch (err) {
+        console.error('socket "catalog" error:', err.message);
+        socket.emit('catalog', { metrics: [], countries: [] });
       }
-    }
-    run().catch(console.dir)
+    });
 
-  })
-})
+    socket.on('data', async ({ metricId, geo } = {}) => {
+      if (!metricId || !geo) {
+        socket.emit('data', null);
+        return;
+      }
+      try {
+        const { doc, revalidation } = await getSeries(metricId, geo);
+        socket.emit('data', doc);
 
-const hostname = '127.0.0.1';
-const port = 4000;
+        if (revalidation) {
+          revalidation
+            .then(async (ok) => {
+              if (!ok) return;
+              const fresh = await earthDB.findOne({ metricId, geo });
+              if (fresh) socket.emit('data:update', withDisplay(fresh));
+            })
+            .catch((err) => console.error('revalidation push error:', err.message));
+        }
+      } catch (err) {
+        console.error('socket "data" error:', err.message);
+        socket.emit('data', null);
+      }
+    });
+  });
 
-httpServer.listen(4003);
-app.listen(4000, () => {
-  console.log('App running on localhost:4000');
-});
+  app.get('*', (req, res) => {
+    res.sendFile(path.resolve('howisearth/build', 'index.html'));
+  });
 
-app.get('*', (req, res) => {
-  res.sendFile(path.resolve('./howisearth/build/', 'index.html'));
+  httpServer.listen(PORT, () => {
+    console.log(`How is Earth? running on http://localhost:${PORT}`);
+  });
+}
+
+start().catch((err) => {
+  console.error('Startup failed:', err);
+  process.exit(1);
 });
